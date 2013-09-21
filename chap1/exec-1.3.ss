@@ -1,0 +1,22 @@
+(define (square x) (* x x))
+
+(define (sum-of-square x y)
+ (+ (square x) (square y)))
+
+(define (max-sum-square x y z)
+ (cond ((and (<= x y) (< x z)) 
+        (sum-of-square y z))
+       ((and (<= y x) (< y z))
+        (sum-of-square x z))
+       (else (sum-of-square x y))))
+
+(max-sum-square 1 2 3)
+(max-sum-square -1 2 2)
+(max-sum-square 0 0 1)
+(max-sum-square 1 0 0)
+(max-sum-square 0 1 0)
+(max-sum-square 0 1 1)
+(max-sum-square 1 1 0)
+(max-sum-square 1 0 1)
+(max-sum-square 2 2 2)
+(max-sum-square 0 0 0)
