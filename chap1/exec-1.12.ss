@@ -1,0 +1,13 @@
+(define (pascal-triangle level position)
+ (cond ((< level 1) 0)
+       ((< level position) 0)
+       ((= position 0) 0)
+       ((= level 1) 1)
+       ((+ (pascal-triangle (- level 1) (- position 1))
+           (pascal-triangle (- level 1) position)))))
+
+(pascal-triangle 1 1)
+(pascal-triangle 2 1)
+(pascal-triangle 2 2)
+(pascal-triangle 4 3)
+(pascal-triangle 5 3)
