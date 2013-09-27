@@ -1,0 +1,22 @@
+(define (fast-expt-iter base n state)
+ (cond ((= n 0) state)
+       ((even? n) (fast-expt-iter base (/ n 2) (* (expt base (/ n 2)) state)))
+       (else (fast-expt-iter base (- n 1) (* state base)))))
+
+(define (fast-expt b n)
+    (fast-expt-iter b n 1))
+
+(fast-expt 2 2)
+(fast-expt 2 3)
+(fast-expt 2 4)
+(fast-expt 2 5)
+(fast-expt 2 6)
+(fast-expt 2 7)
+(fast-expt 2 8)
+(fast-expt 2 9)
+(fast-expt 2 10)
+
+(fast-expt 3 2)
+(fast-expt 4 3)
+(fast-expt 5 4)
+(fast-expt 6 5)
