@@ -1,0 +1,58 @@
+(define (square x) (* x x))
+(define (expmod base exp m)
+ (define (n-tri-check x)
+  (define (inner-check x root)
+   (if (and (not (= x 1)) (not (= x (- m 1))) (= root 1))
+       0
+       root))
+  (inner-check x (remainder (square x) m)))
+ (cond ((= exp 0) 1)
+       ((even? exp) 
+        (n-tri-check (expmod base (/ exp 2) m)))
+       (else
+        (remainder (* base (expmod base (- exp 1) m))
+                   m))))
+(define (fermat-test n)
+ (define (try-it a)
+  (= (expmod a n n) a))
+ (try-it (+ 1 (random (- n 1)))))
+(define (fast-prime? n times)
+ (cond ((= times 0) #t)
+       ((fermat-test n) (fast-prime? n (- times 1)))
+       (else #f)))
+(define (prime? x) (fast-prime? x 3))
+
+(define (filtered-accumulate combiner combine? null-value term a next b)
+ (define (iter cur result)
+  (if (> cur b)
+      result
+      (iter (next cur) 
+            (if (combine? cur) 
+                (combiner (term cur) result)
+                result))))
+ (iter a null-value))
+
+(define (identity x) x)
+(define (ok? x) #t)
+(define (sum a b)
+ (filtered-accumulate + ok? 0 identity a 1+ b))
+
+; 1.33.a
+(define (range-prime-sos a b)
+ (filtered-accumulate + prime? 0 square a 1+ b))
+(range-prime-sos 2 10)
+
+; 1.33.b
+(define (gcd a b)
+ (if (= b 0)
+     a
+     (gcd b (remainder a b))))
+(define (rprime? a b)
+ (= (gcd a b) 1))
+(define (product-rprime n)
+ (define (local-rprime? x)
+  (rprime? x n))
+ (filtered-accumulate * local-rprime? 1 identity 1 1+ n))
+(product-rprime 5)
+(product-rprime 6)
+(product-rprime 10)
