@@ -3,7 +3,7 @@
 
 (define (* a b)
  (cond ((= b 1) a)
-       ((even? b) (* (double a) (halve b)))
+       ((even? b) (double (* a (halve b))))
        (else (+ a (* a (- b 1))))))
 
 (* 3 5)

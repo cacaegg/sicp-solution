@@ -1,10 +1,5 @@
 (define (square x) (* x x))
 
-(define (fast-prime? n times)
- (cond ((= times 0) #t)
-       ((fermat-test n) (fast-prime? n (- times 1)))
-       (else #f)))
-
 (define (fermat-test n x)
  (define (try-it a)
   (= (expmod a n n) a))
