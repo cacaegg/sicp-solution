@@ -147,7 +147,7 @@
  (put 'raise 'rational
   (lambda (obj type) 
    ((get-coercion 'rational type) obj)))
- (put-coercion '(scheme-number rational-number)
+ (put-coercion 'scheme-number 'rational-number
   (lambda (n) ((get 'make 'rational) (content n) 1)))
  'done)
 
