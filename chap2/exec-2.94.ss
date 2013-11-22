@@ -132,6 +132,8 @@
    (make-scheme-number
     (round (/ (numer (content obj))
               (denom (content obj)))))))
+ (put-coercion 'scheme-number 'rational
+  (lambda (n) ((get 'make 'rational) (content n) 1)))
  'done)
 
 
@@ -531,7 +533,7 @@
 (define (greatest-common-divisor p1 p2)
  (apply-generic 'gcd p1 p2))
 
-(let ((p1 (make-sparse-polynomial 'x '((2 1) (0 1))))
-      (p2 (make-sparse-polynomial 'x '((3 1) (0 1)))))
- (display (list "rat-poly:" (make-rational p2 p1)))
+(let ((p1 (make-sparse-polynomial 'x '((4 1) (3 -1) (2 -2) (1 2))))
+      (p2 (make-sparse-polynomial 'x '((3 1) (1 -1)))))
+ (display (list "gcd-poly:" (greatest-common-divisor p1 p2)))
  (newline))
