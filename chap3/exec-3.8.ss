@@ -1,0 +1,10 @@
+(define (make-f)
+ (define last-x 0)
+ (lambda (x)
+  ;(display (list "f:" x last-x))(newline)
+  (let ((ret last-x))
+   (set! last-x x)
+   ret)))
+(define f (make-f))
+
+(+ (f 0) (f 1))
