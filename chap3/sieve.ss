@@ -9,13 +9,18 @@
           (begin
                  (display (list "got memory:" result))(newline)
                  result)))))
-(define (delay-m e) 
-  (memo-proc (lambda () e)))
+;(define (delay-m e) 
+;  (memo-proc (lambda () e)))
 ; (define (delay e) (lambda () e))
+; (define-syntax (delay
 
 (define the-empty-stream '())
-(define (cons-stream a b)
-  (cons a (delay b)))
+;(define (cons-stream a b)
+;  (cons a (delay b)))
+(define-syntax cons-stream
+  (syntax-rules ()
+    ((cons-stream a b)
+     (cons a (memo-proc (delay b))))))
 (define (stream-car stream) (car stream))
 (define (stream-cdr stream) (force (cdr stream)))
 (define (stream-null? stream) (eq? the-empty-stream stream))
@@ -42,7 +47,7 @@
       (begin (proc (stream-car s))
              (stream-for-each proc (stream-cdr s)))))
 (define (stream-filter pred stream)
-  (display stream (pred (stream-car stream)))(newline)
+  ;(display stream (pred (stream-car stream)))(newline)
   (cond ((stream-null? stream) the-empty-stream)
         ((pred (stream-car stream))
          (cons-stream (stream-car stream)
@@ -65,7 +70,7 @@
 (define (integers-starting-from n)
   (cons-stream n (integers-starting-from (+ n 1))))
 (define integers (integers-starting-from 1))
-(display integers)(newline)
+; (display integers)(newline)
 
 (define (sieve stream)
   (cons-stream
@@ -77,5 +82,5 @@
         (stream-cdr stream)))))
 
 
-;(define primes (sieve (integers-starting-from 2)))
-;(stream-ref primes 1)
+(define primes (sieve (integers-starting-from 2)))
+(stream-ref primes 50)
