@@ -1,0 +1,6 @@
+(define (make-zero-crossing input-stream last-1 last-avg)
+  (let ((avg (/ (+ (stream-car input-stream) last-1) 2)))
+    (cons-stream (sign-change-detector last-avg avg)
+                 (make-zero-crossing (stream-cdr input-stream)
+                                     (stream-car input-stream)
+                                     avg))))
