@@ -1,18 +1,26 @@
+;; Operation, type -> procedure
+;; Dispatch table.
+(define *op-table* (make-hashtable equal-hash equal?))
+(define (put op type proc)
+ (hashtable-set! *op-table* (list op type) proc))
+(define (get op type)
+ (hashtable-ref *op-table* (list op type) '()))
+
+(define (type-tag exp) (car exp))
+
+(put 'type-op 'if eval-if)
+(put 'type-op 'begin eval-sequence)
+(put 'type-op 'set! eval-assignment)
+(put 'type-op 'define eval-definition)
+(put 'type-op 'quote text-of-quotation)
+(put 'type-op 'lambda make-procedure)
+(put 'type-op 'cond 
+     (lambda (exp env) (eval (cond->if exp) env)))
+
 (define (eval exp env)
   (cond ((self-evaluating? exp) exp)
         ((variable? exp) (lookup-variable-value exp env))
-        ((quoted? exp) (text-of-quotation exp))
-        ((assignment? exp) (eval-assignmnet exp env))
-        ((definition? exp) (eval-definition exp env))
-        ((if? exp) (eval-if exp env))
-        ((lambda? exp)
-         (make-procedure (lambda-parameter exp)
-                         (lambda-body exp)
-                         env))
-        ((begin? exp)
-         (eval-sequence (begin-actions exp) env))
-        ((cond? exp)
-         (eval (cond->if exp) env))
+        ((get 'type-op (type-tag exp)) exp env)
         ((application? exp)
          (apply (eval (operator exp) env)
                 (list-of-values (operands exp) env)))
@@ -68,8 +76,6 @@
 (define (variable? exp) (symbol? exp))
 
 ;; Form (quote <text-of-quotation>)
-(define (quoted? exp)
-  (tagged-list? exp 'quote))
 (define (test-of-quotation exp) (cadr exp))
 
 (define (tagged-list? exp tag)

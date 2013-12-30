@@ -1,18 +1,32 @@
+;; Operation, type -> procedure
+;; Dispatch table.
+(define *op-table* (make-hashtable equal-hash equal?))
+(define (put op type proc)
+ (hashtable-set! *op-table* (list op type) proc))
+(define (get op type)
+ (hashtable-ref *op-table* (list op type) '()))
+
+(define (type-tag exp) (car exp))
+
+(put 'type-op 'and eval-and)
+(put 'type-op 'or eval-or)
+(put 'type-op 'if eval-if)
+(put 'type-op 'begin eval-sequence)
+(put 'type-op 'set! eval-assignment)
+(put 'type-op 'define eval-definition)
+(put 'type-op 'quote text-of-quotation)
+(put 'type-op 'lambda make-procedure)
+(put 'type-op 'cond 
+     (lambda (exp env) (eval (cond->if exp) env)))
+(put 'type-op 'let
+     (lambda (exp env) (eval (let->combination exp) env)))
+(put 'type-op 'let*
+     (lambda (exp env) (eval (let*->nested-lets exp) env)))
+
 (define (eval exp env)
   (cond ((self-evaluating? exp) exp)
         ((variable? exp) (lookup-variable-value exp env))
-        ((quoted? exp) (text-of-quotation exp))
-        ((assignment? exp) (eval-assignmnet exp env))
-        ((definition? exp) (eval-definition exp env))
-        ((if? exp) (eval-if exp env))
-        ((lambda? exp)
-         (make-procedure (lambda-parameter exp)
-                         (lambda-body exp)
-                         env))
-        ((begin? exp)
-         (eval-sequence (begin-actions exp) env))
-        ((cond? exp)
-         (eval (cond->if exp) env))
+        ((get 'type-op (type-tag exp)) exp env)
         ((application? exp)
          (apply (eval (operator exp) env)
                 (list-of-values (operands exp) env)))
@@ -60,6 +74,30 @@
                     env)
   'ok)
 
+(define (eval-and exp env)
+  (cond ((null? (and-exps exp)) #t)
+        (else
+         (let ((exps (and-exps exp)))
+           (let ((head (eval (and-head exps) env))
+                 (rest (and-rest exps)))
+             (if head
+                 (if (null? rest)
+                     head
+                     (eval (make-and rest) env))
+                 #f))))))
+
+(define (eval-or exp env)
+  (let ((exps (and-exps exp)))
+    (cond ((null? exps) #f)
+          (else
+            (let ((head (eval (or-head exps) env))
+                  (rest (or-rest exps)))
+              (if head
+                  head
+                  (if (null? rest)
+                      #f
+                      (eval (make-or rest) env))))))))
+
 (define (self-evaluating? exp)
   (cond ((number? exp) #t)
         ((string? exp) #t)
@@ -67,9 +105,19 @@
 
 (define (variable? exp) (symbol? exp))
 
+;; Form (and exp1 ... expN)
+(define (and-exps exp) (cdr exp))
+(define (and-exps-head exp) (car exp))
+(define (and-exps-rest exp) (cdr exp))
+(define (make-and exp) (cons 'and exp))
+
+;; Form (or exp1 ... expN)
+(define (or-exps exp) (cdr exp))
+(define (or-exps-head exp) (car exp))
+(define (or-exps-rest exp) (cdr exp))
+(define (make-or exp) (cons 'or exp))
+
 ;; Form (quote <text-of-quotation>)
-(define (quoted? exp)
-  (tagged-list? exp 'quote))
 (define (test-of-quotation exp) (cadr exp))
 
 (define (tagged-list? exp tag)
@@ -136,9 +184,11 @@
 (define (rest-operand ops) (cdr ops))
 
 ;; ======= Derived Experssions =======
-;; Cond
+;; cond
 (define (cond? exp) (tagged-list? exp 'cond))
 (define (cond-clauses exp) (cdr exp))
+(define (cond-test-recipient? exp) (eq? (cadr exp) '=>))
+(define (cond-recipient exp) (caddr exp))
 (define (cond-else-clause? clause)
   (eq? (cond-predicate clause) 'else))
 (define (cond-predicate clause) (car clause))
@@ -155,5 +205,50 @@
                 (sequence->exp (cond-actions first))
                 (error 'cond->if "ELSE clause isn't the last -- COND->IF" clauses))
             (make-if (cond-predicate first)
-                     (sequence->exp (cond-actions first))
+                     (if (cond-test-recipient? first)
+                         (list (cond-recipient first) (cond-predicate first))
+                         (sequence->exp (cond-actions first)))
                      (expand-clauses rest))))))
+
+;; let
+(define (let? exp) (tagged-list? exp 'let))
+(define (let-name? exp) (symbol? (cadr exp)))
+(define (let-name exp) (cadr exp))
+(define (let-bind-exps exp) (cadr exp))
+(define (let-bind-var exp) (car exp))
+(define (let-bind-exp exp) 
+  (if (let-name? exp)
+      (cddr exp)
+      (cdr exp)))
+(define (let-body exp) 
+  (if (let-name? exp)
+      (cdddr exp)
+      (cddr exp)))
+(define (let->combination exp)
+  (if (let-name? exp)
+      (sequence->exp
+        (list 
+          (list 'define  (let-name exp) 
+                         (expand-let (map let-bind-var (let-bind-exps exp))
+                                     (let-body exp)))
+          (list (let-name exp) (map let-bind-exp (let-bind-exps exp)))))
+      (expand-let (let-bind-exps exp) (let-body exp))))
+; transform to following form
+; ((lambda (var1 ... varN) body) exp1 ... expN)
+(define (expand-let bind-exps body)
+  (list (make-lambda (map let-bind-var bind-exps) body)
+        (map let-bind-exp bind-exps)))
+(define (make-let bind-exps body)
+  (list 'let bind-exps body))
+
+;; let*
+(define (let*->nested-lets exp)
+  (let ((bind-exps (let-bind-exps exp)))
+    (if (null? (cdr bind-exps))
+        (let->combination exp)
+        (make-let
+          (car bind-exps)
+          (let*->nested-lets
+            (make-let* (cdr bind-exps) (let-body exp)))))))
+(define (make-let* bind-exps body)
+  (list 'let* bind-exps body))
