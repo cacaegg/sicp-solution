@@ -110,6 +110,7 @@
       (cadr exp)
       (caadr exp)))
 (define (definition-value exp)
+  ; (display (list 'definition-value exp (cadr exp)))(newline)
   (if (symbol? (cadr exp))
       (caddr exp)
       (make-lambda (cdadr exp)      ; formal parameters
