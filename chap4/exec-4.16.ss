@@ -308,7 +308,7 @@
     (env-loop var env (enclosing-environment env) proc-null proc-find))
   (define (proc-find pair) 
     ; (display (list 'proc-find pair))(newline)
-    (set-cdr! pair val)
+    (set-cdr! pair val))
   (env-loop var env proc-null proc-find))
 
 ;; (make-unbound! var env)

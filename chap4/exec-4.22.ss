@@ -1,6 +1,7 @@
 (define apply-in-underlying-scheme apply)
 
-(define (eval exp env) ((analyze exp) env))
+(define (eval exp env) 
+  ((analyze exp) env))
 
 (define (analyze exp)
   (cond ((self-evaluating? exp)
@@ -36,7 +37,7 @@
   (let ((var (definition-variable exp))
         (vproc (analyze (definition-value exp))))
     (lambda (env)
-      (define-variable! var (vproc env env))
+      (define-variable! var (vproc env) env)
       'ok)))
 (define (analyze-if exp)
   (let ((pproc (analyze (if-predicate exp)))
@@ -203,6 +204,7 @@
         (list 'cdr cdr)
         (list 'cons cons)
         (list 'null? null?)
+        (list '= =)
         (list '+ +)
         (list '- -)
         (list '* *) 

@@ -7,6 +7,8 @@
 ; However, in the text book's version, it will simply return n, which is 
 ; the expected behavior of this expression.
 ;
-; 2. analyze-sequence is analyzed in run-time, if we need to modify algorithm.
-; Remove, so., little endion.
+; 2. execute-sequence is executed in run-time for Alyssa P. Hacker's version, 
+; but the text book's runs when it is analyzed. 
+; // Remove, so., little endion.
+;
 ; 
