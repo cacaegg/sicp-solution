@@ -1,3 +1,12 @@
+(define (memo-proc proc)
+  (let ((already-run? #f) (result #f))
+    (lambda ()
+      (if (not already-run?)
+          (begin (set! result (proc))
+                 (set! already-run? #t)
+                 result)
+          result))))
+
 (define apply-in-underlying-scheme apply)
 
 (define (apply procedure arguments env)
@@ -44,11 +53,18 @@
 (define (force-it obj)
   ; (display (list 'force obj))(newline)
   (cond ((thunk? obj)
-         (actual-value (thunk-exp obj) (thunk-env obj)))
+         (let ((result (actual-value
+                         (thunk-exp obj)
+                         (thunk-env obj))))
+           (set-car! obj 'evaluated-thunk) 
+           (set-car! (cdr obj) result)  ; replace exp with its value
+           (set-cdr! (cdr obj) '())     ; forget env
+            result))
+        ((evaluated-thunk? obj)
+         (thunk-value obj))
         (else obj)))
 
 (define (delay-it exp env)
-  ; (display (list 'delay exp))(newline)
   (list 'thunk exp env))
 
 (define (thunk? obj)
@@ -58,6 +74,11 @@
 
 
 (define (thunk-env thunk) (caddr thunk))
+
+(define (evaluated-thunk? obj)
+  (tagged-list? obj 'evaluated-thunk))
+
+(define (thunk-value evaluated-thunk) (cadr evaluated-thunk))
 
 (define (list-of-arg-values exps env)
   (if (no-operands? exps)
