@@ -1,11 +1,11 @@
-(define (memo-proc proc)
-  (let ((already-run? #f) (result #f))
-    (lambda ()
-      (if (not already-run?)
-          (begin (set! result (proc))
-                 (set! already-run? #t)
-                 result)
-          result))))
+; (define (f a (b lazy) c (d lazy-memo)) (+ a a b b c c d d))
+;;; L-Eval input:
+; (f 1 2 3 4)
+; (force-thunk 2)
+; (force-thunk 2)
+; (force-thunk-memo 4)
+; ;;; L-Eval value:
+; 20
 
 (define apply-in-underlying-scheme apply)
 
@@ -19,7 +19,7 @@
            (procedure-body procedure)
            (extend-environment
              (procedure-parameters procedure)
-             (list-of-delayed-args arguments env)
+             arguments
              (procedure-environment procedure))))
         (else
           (error 'apply "Unknown procedure type -- APPLY" procedure))))
@@ -52,7 +52,8 @@
 ; Memorized version
 (define (force-it obj)
   ; (display (list 'force obj))(newline)
-  (cond ((thunk? obj)
+  (cond ((thunk-memo? obj)
+         (display (list 'force-thunk-memo (thunk-exp obj)))(newline)
          (let ((result (actual-value
                          (thunk-exp obj)
                          (thunk-env obj))))
@@ -60,6 +61,10 @@
            (set-car! (cdr obj) result)  ; replace exp with its value
            (set-cdr! (cdr obj) '())     ; forget env
             result))
+        ((thunk? obj)
+         (display (list 'force-thunk (thunk-exp obj)))(newline)
+         (actual-value (thunk-exp obj) 
+                       (thunk-env obj)))
         ((evaluated-thunk? obj)
          (thunk-value obj))
         (else obj)))
@@ -67,8 +72,14 @@
 (define (delay-it exp env)
   (list 'thunk exp env))
 
+(define (delay-memo-it exp env)
+  (list 'thunk-memo exp env))
+
 (define (thunk? obj)
   (tagged-list? obj 'thunk))
+
+(define (thunk-memo? obj)
+  (tagged-list? obj 'thunk-memo))
 
 (define (thunk-exp thunk) (cadr thunk))
 
@@ -85,12 +96,6 @@
       '()
       (cons (actual-value (first-operand exps) env)
             (list-of-arg-values (rest-operands exps) env))))
-
-(define (list-of-delayed-args exps env)
-  (if (no-operands? exps)
-      '()
-      (cons (delay-it (first-operand exps) env)
-            (list-of-delayed-args (rest-operands exps) env))))
 
 (define (actual-value exp env) (force-it (eval exp env)))
 
@@ -113,11 +118,22 @@
   'ok)
 
 (define (eval-definition exp env)
-  ; (display (list 'eval (definition-variable exp)))(newline)
+  ;(display (list 'eval-definition (definition-variable exp)
+  ;               (definition-value exp)))(newline)
+  ;(define (argval-transfomer arg)
+  ;  (cond ((not (alist? arg)) (eval 
+  ;        ((not (eq? #f (assq 'lazy-memo)))
+  ;         (
   (define-variable! (definition-variable exp)
                     (eval (definition-value exp) env)
                     env)
   'ok)
+
+(define (lazy-memo? var)
+  (and (pair? var) (eq? (cadr var) 'lazy-memo)))
+
+(define (lazy? var)
+  (and (pair? var) (eq? (cadr var) 'lazy)))
 
 (define (self-evaluating? exp)
   (cond ((number? exp) #t)
@@ -151,6 +167,7 @@
       (cadr exp)
       (caadr exp)))
 (define (definition-value exp)
+  ; (define (parameter-transform params bodys
   (if (symbol? (cadr exp))
       (caddr exp)
       (make-lambda (cdadr exp)      ; formal parameters
@@ -229,6 +246,7 @@
    (primitive-implementation proc) args))
 ;; Construct compound procedures
 (define (make-procedure parameters body env)
+  ; (display (list 'make-procedure parameters body))(newline)
   (list 'procedure parameters body env))
 (define (compound-procedure? p)
   (tagged-list? p 'procedure))
@@ -263,10 +281,24 @@
           (scan (frame-variables frame)
                 (frame-values frame)))))
   (env-loop env))
+
 ;; (extend-environment <variables> <values> <base-env>)
 (define (extend-environment vars vals base-env)
+  (define (vars-vals-transform vars vals)
+    (map (lambda (var val)
+           (cond ((not (pair? var))
+                  (cons var val))
+                 ((lazy-memo? var)
+                  (cons (car var) (delay-memo-it val base-env)))
+                 ((lazy? var)
+                  (cons (car var) (delay-it val base-env)))))
+         vars vals))
+  ; (display (list 'extend-env vars vals))(newline)
   (if (= (length vars) (length vals))
-      (cons (make-frame vars vals) base-env)
+      (let ((vars-vals (vars-vals-transform vars vals)))
+           (cons (make-frame (map car vars-vals) 
+                             (map cdr vars-vals))
+                 base-env))
       (if (< (length vars) (length vals))
           (error 'extend-environment "Too many argument supplied" vars vals)
           (error 'extend-environment "Too few arguments supplied" vars vals))))
