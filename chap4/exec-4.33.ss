@@ -1,12 +1,3 @@
-; (define (f a (b lazy) c (d lazy-memo)) (+ a a b b c c d d))
-;;; L-Eval input:
-; (f 1 2 3 4)
-; (force-thunk 2)
-; (force-thunk 2)
-; (force-thunk-memo 4)
-; ;;; L-Eval value:
-; 20
-
 (define apply-in-underlying-scheme apply)
 
 (define (apply procedure arguments env)
@@ -32,7 +23,7 @@
   ; (display (list 'eval exp (map car env)))(newline)
   (cond ((self-evaluating? exp) exp)
         ((variable? exp) (lookup-variable-value exp env))
-        ((quoted? exp) (text-of-quotation exp))
+        ((quoted? exp) (text-of-quotation exp env))
         ((assignment? exp) (eval-assignment exp env))
         ((definition? exp) (eval-definition exp env))
         ((if? exp) (eval-if exp env))
@@ -55,7 +46,7 @@
 ;      obj))
 ; Memorized version
 (define (force-it obj)
-  ; (display (list 'force obj))(newline)
+  ; (display (list 'force))(newline)
   (cond ((thunk-memo? obj)
          ; (display (list 'force-thunk-memo (thunk-exp obj)))(newline)
          (let ((result (actual-value
@@ -71,7 +62,9 @@
                        (thunk-env obj)))
         ((evaluated-thunk? obj)
          (thunk-value obj))
-        (else obj)))
+        (else 
+          ; (display (list 'force-else))(newline)
+          obj)))
 
 (define (delay-it exp env)
   (list 'thunk exp env))
@@ -149,7 +142,18 @@
 ;; Form (quote <text-of-quotation>)
 (define (quoted? exp)
   (tagged-list? exp 'quote))
-(define (text-of-quotation exp) (cadr exp))
+(define (text-of-quotation exp env) 
+  (define (cons-loop ls)
+    (if (null? ls)
+        '()
+        (let ((token (car ls)))
+          (if (self-evaluating? token)
+              (list 'cons token (cons-loop (cdr ls)))
+              (list 'cons `(quote ,(car ls)) (cons-loop (cdr ls)))))))
+  ; (display (list 'text-of-quotation (cadr exp)))(newline)
+  (if (pair? (cadr exp))
+      (eval (cons-loop (cadr exp)) env)
+      (cadr exp)))
 
 (define (tagged-list? exp tag)
   (if (pair? exp)
@@ -282,7 +286,7 @@
         (let ((frame (first-frame env)))
           (scan (frame-variables frame)
                 (frame-values frame)))))
-  ; (display (list 'lookup-variable-value var (car (env-loop env))))(newline)
+  ; (display (list 'lookup-variable-value var))(newline)
   (env-loop env))
 
 (define (evaluate-compound-arguments vars vals env)
