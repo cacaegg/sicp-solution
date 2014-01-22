@@ -62,8 +62,6 @@
                        (thunk-env obj)))
         ((evaluated-thunk? obj)
          (thunk-value obj))
-        ((lazy-pair? obj)
-         (actual-value (lazy-value obj) (lazy-environment)))
         (else 
           ; (display (list 'force-else))(newline)
           obj)))
@@ -240,6 +238,9 @@
         (list 'list list)
         (list 'newline newline)
         (list 'display display)
+        (list 'rcons cons)
+        (list 'rcar car)
+        (list 'rcdr cdr)
         (list '= =)
         (list '+ +)
         (list '- -)
@@ -366,6 +367,7 @@
                      (sequence->exp (cond-actions first))
                      (expand-clauses rest))))))
 
+
 ;; ======== Setup Global environment ==========
 (define (setup-environment)
   (let ((initial-env
@@ -403,5 +405,15 @@
 
 ;; ======== Start the evaluator ==========
 (define the-global-environment (setup-environment))
+(actual-value 
+  '(begin
+     (define (cons (x lazy) (y lazy))
+       (list 'lazy-pair (lambda (m) (m x y))))
+     (define (car z)
+       ((rcar (rcdr z)) (lambda (p q) p)))
+     (define (cdr z)
+       ((rcar (rcdr z)) (lambda (p q) q)))
+   ) 
+  the-global-environment)
 (driver-loop)
 
