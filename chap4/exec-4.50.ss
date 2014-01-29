@@ -4,7 +4,6 @@
   ((analyze exp) env))
 
 (define (analyze exp)
-  (display (list 'analyze exp))(newline)
   (cond ((self-evaluating? exp)
          (analyze-self-evaluating exp))
         ((quoted? exp) (analyze-quoted exp))
@@ -15,6 +14,7 @@
         ((lambda? exp) (analyze-lambda exp))
         ((begin? exp) (analyze-sequence (begin-actions exp)))
         ((cond? exp) (analyze (cond->if exp)))
+        ((let? exp) (analyze (let->combination exp)))
         ((amb? exp) (analyze-amb exp))
         ((ramb? exp) (analyze-ramb exp))
         ((application? exp) (analyze-application exp))
@@ -80,7 +80,7 @@
     (lambda (env succeed fail)
       (vproc env
              (lambda (val fail2)
-               (define-variable! var val)
+               (define-variable! var val env)
                (succeed 'ok fail2))
              fail))))
 
@@ -271,6 +271,8 @@
         (list 'cdr cdr)
         (list 'cons cons)
         (list 'null? null?)
+        (list 'list list)
+        (list 'not not)
         (list '+ +)
         (list '- -)
         (list '* *) 
@@ -421,6 +423,24 @@
             (make-if (cond-predicate first)
                      (sequence->exp (cond-actions first))
                      (expand-clauses rest))))))
+
+;;; Support for Let (as noted in footnote 56, p.428)
+
+(define (let? exp) (tagged-list? exp 'let))
+(define (let-bindings exp) (cadr exp))
+(define (let-body exp) (cddr exp))
+
+(define (let-var binding) (car binding))
+(define (let-val binding) (cadr binding))
+
+(define (make-combination operator operands) (cons operator operands))
+
+(define (let->combination exp)
+  ;;make-combination defined in earlier exercise
+  (let ((bindings (let-bindings exp)))
+    (make-combination (make-lambda (map let-var bindings)
+                                   (let-body exp))
+                      (map let-val bindings))))
 
 ;; ======== Setup Global environment ==========
 (define (setup-environment)
