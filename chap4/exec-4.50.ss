@@ -1,8 +1,10 @@
 (define apply-in-underlying-scheme apply)
 
-(define (eval exp env) ((analyze exp) env))
+(define (eval exp env) 
+  ((analyze exp) env))
 
 (define (analyze exp)
+  (display (list 'analyze exp))(newline)
   (cond ((self-evaluating? exp)
          (analyze-self-evaluating exp))
         ((quoted? exp) (analyze-quoted exp))
@@ -14,6 +16,7 @@
         ((begin? exp) (analyze-sequence (begin-actions exp)))
         ((cond? exp) (analyze (cond->if exp)))
         ((amb? exp) (analyze-amb exp))
+        ((ramb? exp) (analyze-ramb exp))
         ((application? exp) (analyze-application exp))
         (else
           (error 'analyze "Unknown expression type -- ANALYZE" exp))))
@@ -352,6 +355,7 @@
 
 ;; ======= amb syntax ========
 (define (amb? exp) (tagged-list? exp 'amb))
+(define (ramb? exp) (tagged-list? exp 'ramb))
 (define (amb-choices exp) (cdr exp))
 
 ;; General form of continuation
@@ -371,6 +375,29 @@
                            (lambda ()
                              (try-next (cdr choices))))))
       (try-next cprocs))))
+
+(define (analyze-ramb exp)
+  (define (list-index ls n)
+    (cond ((< (length ls) (+ n 1)) (error 'list-index "Out of Index" ls n))
+          ((= n 0) (car ls))
+          (else 
+            (list-index (cdr ls) (- n 1)))))
+  (let ((cprocs (map analyze (amb-choices exp))))
+    (lambda (env succeed fail)
+      (define (try-next choices)
+        (if (null? choices)
+            (fail)
+            (let* ((index (random (length choices)))
+                   (choosen (list-index choices index)))
+              (choosen env
+                       succeed
+                       (lambda ()
+                         (try-next 
+                           (filter (lambda (p) 
+                                     (not (eq? p choosen)))
+                                   choices)))))))
+      (try-next cprocs))))
+            
 
 ;; ======= Derived Experssions =======
 ;; Cond
