@@ -1,0 +1,6 @@
+(assert! (marriage jack mary))
+(assert! (marriage tom nacy))
+(assert! (marriage louis hellen))
+(assert! (rule (marriage ?a ?b)
+	       (marriage ?b ?a)))
+(marriage jack ?w)
