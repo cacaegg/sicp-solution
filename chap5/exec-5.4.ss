@@ -7,14 +7,14 @@
  (save continue)
  (assign continue (label after-expt))
  (assign n (op -) (reg n) 1)
- (goto expt-start)
+ (goto (label expt-start))
  after-expt
  (restore continue)
  (assign val (op *) (reg val) (reg b))
- (goto (label continue))
+ (goto (reg continue))
  base-case
  (assign val (const 1))
- (goto (continue))
+ (goto (reg continue))
  expt-done
  )
 
