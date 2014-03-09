@@ -174,8 +174,20 @@
 	 (make-restore inst machine stack pc))
 	((eq? (car inst) 'perform)
 	 (make-perform inst machine labels ops pc))
+	((eq? (car inst) 'inc)
+	 (make-inc inst machine ops pc))
 	(else error 'make-execution-procedure
 	      "Unknown instruction type" inst)))
+
+(define (make-inc inst machine operations pc)
+  (let ((target
+	 (get-register machine
+		       (inc-register inst))))
+    (lambda ()
+      (set-contents! target (+ (get-contents target) 1))
+      (advance-pc pc))))
+(define (inc-register inst)
+  (register-exp-reg (cadr inst)))
 
 (define (make-assign inst machine labels operations pc)
   (let ((target
@@ -224,6 +236,9 @@
 		(advance-pc pc))))
 	(error 'make-branch "Bad BRANCH instruction" inst))))
 
+(define (branch-dest branch-instruction)
+  (cadr branch-instruction))
+
 (define (make-goto inst machine labels pc)
   (let ((dest (goto-dest inst)))
     (cond ((label-exp? dest)
@@ -246,14 +261,18 @@
   (let ((reg (get-register machine
 			   (stack-inst-reg-name inst))))
     (lambda ()
-      (push stack (get-contents reg))
+      (push stack (cons reg (get-contents reg)))
       (advance-pc pc))))
 (define (make-restore inst machine stack pc)
   (let ((reg (get-register machine
 			   (stack-inst-reg-name inst))))
     (lambda ()
-      (set-contents! reg (pop stack))
-      (advance-pc pc))))
+      (let ((val (pop stack)))
+	(if (eq? reg (car val))
+	    (begin
+	      (set-contents! reg (cdr val))
+	      (advance-pc pc))
+	    (error 'make-restore "Unmatched push back" val reg))))))
 (define (stack-inst-reg-name stack-instruction)
   (cadr stack-instruction))
 
@@ -301,9 +320,7 @@
   (let ((op (lookup-prim (operation-exp-op exp) operations))
 	(aprocs
 	 (map (lambda (e)
-		(if (not (label-exp? e))
-		    (make-primitive-exp e machine labels)
-		    (error 'make-operation-exp "Can't use label as operator" exp)))
+		(make-primitive-exp e machine labels))
 	      (operation-exp-operands exp))))
     (lambda ()
       (apply op (map (lambda (p) (p)) aprocs)))))

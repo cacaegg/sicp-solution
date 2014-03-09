@@ -59,19 +59,22 @@
 (define (make-new-machine)
   (let ((pc (make-register 'pc))
 	(flag (make-register 'flag))
-	(stack (make-stack))
+	(stacks '())
 	(the-instruction-sequence '()))
-    (let ((the-ops
-	   (list (list 'initialize-stack
-		       (lambda () (stack 'initialize)))))
+    (let ((the-ops '())
 	  (register-table
 	   (list (list 'pc pc) (list 'flag flag))))
       (define (allocate-register name)
 	(if (assoc name register-table)
 	    (error 'allocate-register "Duplicated register name" name)
-	    (set! register-table
-		  (cons (list name (make-register name))
-			register-table)))
+	    (let ((new-stack (make-stack)))
+	      (new-stack 'initialize)
+	      (set! stacks
+		    (cons (list name new-stack)
+			  stacks))
+	      (set! register-table
+		    (cons (list name (make-register name))
+			  register-table))))
 	'register-allocated)
       (define (lookup-register name)
 	(let ((val (assoc name register-table)))
@@ -95,7 +98,7 @@
 	      ((eq? msg 'get-register) lookup-register)
 	      ((eq? msg 'install-operations)
 	       (lambda (ops) (set! the-ops (append the-ops ops))))
-	      ((eq? msg 'stack) stack)
+	      ((eq? msg 'stacks) stacks)
 	      ((eq? msg 'operations) the-ops)
 	      (else (error 'machine "Unknown request" msg))))
       dispatch)))
@@ -126,7 +129,7 @@
 (define (update-insts! insts labels machine)
   (let ((pc (get-register machine 'pc))
 	(flag (get-register machine 'flag))
-	(stack (machine 'stack))
+	(stacks (machine 'stacks))
 	(ops (machine 'operations)))
     (for-each
      (lambda (inst)
@@ -134,7 +137,7 @@
 	inst
 	(make-execution-procedure
 	 (instruction-text inst) labels machine
-	 pc flag stack ops)))
+	 pc flag stacks ops)))
      insts)))
 
 (define (make-instruction text)
@@ -159,7 +162,7 @@
 	(error 'lookup-label "Undefined label" label-name))))
 
 (define (make-execution-procedure inst labels machine
-				  pc flag stack ops)
+				  pc flag stacks ops)
   (cond ((eq? (car inst) 'assign)
 	 (make-assign inst machine labels ops pc))
 	((eq? (car inst) 'test)
@@ -169,9 +172,9 @@
 	((eq? (car inst) 'goto)
 	 (make-goto inst machine labels pc))
 	((eq? (car inst) 'save)
-	 (make-save inst machine stack pc))
+	 (make-save inst machine stacks pc))
 	((eq? (car inst) 'restore)
-	 (make-restore inst machine stack pc))
+	 (make-restore inst machine stacks pc))
 	((eq? (car inst) 'perform)
 	 (make-perform inst machine labels ops pc))
 	(else error 'make-execution-procedure
@@ -207,7 +210,7 @@
 		condition machine labels operations)))
 	  (lambda ()
 	    (set-contents! flag (condition-proc))
-	    (advance-pc pc)))
+	    (advance-pc)))
 	(error 'make-test "Bad TEST instruction" inst))))
 
 (define (test-condition test-inst)
@@ -242,17 +245,19 @@
 (define (goto-dest goto-inst)
   (cadr goto-inst))
 
-(define (make-save inst machine stack pc)
-  (let ((reg (get-register machine
-			   (stack-inst-reg-name inst))))
+(define (make-save inst machine stacks pc)
+  (let* ((reg (get-register machine
+			    (stack-inst-reg-name inst)))
+	 (stack (assoc (stack-inst-reg-name inst) stacks)))
     (lambda ()
-      (push stack (get-contents reg))
+      (push (cadr stack) (get-contents reg))
       (advance-pc pc))))
-(define (make-restore inst machine stack pc)
-  (let ((reg (get-register machine
-			   (stack-inst-reg-name inst))))
+(define (make-restore inst machine stacks pc)
+  (let* ((reg (get-register machine
+			    (stack-inst-reg-name inst)))
+	 (stack (assoc (stack-inst-reg-name inst) stacks)))
     (lambda ()
-      (set-contents! reg (pop stack))
+      (set-contents! reg (pop (cadr stack)))
       (advance-pc pc))))
 (define (stack-inst-reg-name stack-instruction)
   (cadr stack-instruction))

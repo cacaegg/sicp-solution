@@ -174,8 +174,20 @@
 	 (make-restore inst machine stack pc))
 	((eq? (car inst) 'perform)
 	 (make-perform inst machine labels ops pc))
+	((eq? (car inst) 'inc)
+	 (make-inc inst machine ops pc))
 	(else error 'make-execution-procedure
 	      "Unknown instruction type" inst)))
+
+(define (make-inc inst machine operations pc)
+  (let ((target
+	 (get-register machine
+		       (inc-register inst))))
+    (lambda ()
+      (set-contents! target (+ (get-contents target) 1))
+      (advance-pc pc))))
+(define (inc-register inst)
+  (register-exp-reg (cadr inst)))
 
 (define (make-assign inst machine labels operations pc)
   (let ((target
@@ -207,7 +219,7 @@
 		condition machine labels operations)))
 	  (lambda ()
 	    (set-contents! flag (condition-proc))
-	    (advance-pc pc)))
+	    (advance-pc)))
 	(error 'make-test "Bad TEST instruction" inst))))
 
 (define (test-condition test-inst)

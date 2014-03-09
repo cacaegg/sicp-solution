@@ -6,6 +6,7 @@
     ((machine 'install-operations) ops)
     ((machine 'install-instruction-sequence)
      (assemble controller-text machine))
+    (((get-analyzer machine) 'initialize) register-names)
     machine))
 
 ;;; Register implementation and operation interface
@@ -55,12 +56,15 @@
   (set-contents! (get-register machine register-name) value))
 (define (get-register machine register-name)
   ((machine 'get-register) register-name))
+(define (get-analyzer machine) (machine 'get-analyzer))
+(define (analyze-machine machine) (machine 'analyze))
 
 (define (make-new-machine)
   (let ((pc (make-register 'pc))
 	(flag (make-register 'flag))
 	(stack (make-stack))
-	(the-instruction-sequence '()))
+	(the-instruction-sequence '())
+	(asm-analyzer (make-asm-analyzer)))
     (let ((the-ops
 	   (list (list 'initialize-stack
 		       (lambda () (stack 'initialize)))))
@@ -97,6 +101,8 @@
 	       (lambda (ops) (set! the-ops (append the-ops ops))))
 	      ((eq? msg 'stack) stack)
 	      ((eq? msg 'operations) the-ops)
+	      ((eq? msg 'get-analyzer) asm-analyzer)
+	      ((eq? msg 'analyze) (asm-analyzer 'dump))
 	      (else (error 'machine "Unknown request" msg))))
       dispatch)))
 
@@ -106,6 +112,47 @@
 		  (lambda (insts labels)
 		    (update-insts! insts labels machine)
 		    insts)))
+
+(define (make-asm-analyzer)
+  (let ((insts '())
+	(entry-reg '())
+	(srd-reg '())
+	(reg-srcs '()))
+    (define (add-inst inst)
+      (if (not (assoc inst insts))
+	  (set! insts (cons (cons inst 0) insts))))
+    (define (add-entry reg)
+      (if (not (assoc reg entry-reg))
+	  (set! entry-reg (cons (cons reg 0) entry-reg))))
+    (define (add-srd reg)
+      (if (not (assoc reg srd-reg))
+	  (set! srd-reg (cons (cons reg '()) srd-reg))))
+    (define (add-source reg src)
+      (let ((reg-src (assoc reg reg-srcs)))
+	(if (not (assoc src (cdr reg-src)))
+	    (set-cdr! reg-src
+		      (cons (cons src '())
+			    (cdr reg-src))))))
+    (define (dispatch msg)
+      (cond ((eq? msg 'new-inst)
+	     (lambda (n-inst) (add-inst n-inst)))
+	    ((eq? msg 'new-entry)
+	     (lambda (reg) (add-entry reg)))
+	    ((eq? msg 'new-srd)
+	     (lambda (reg) (add-srd reg)))
+	    ((eq? msg 'new-src)
+	     (lambda (reg src) (add-source reg src)))
+	    ((eq? msg 'initialize)
+	     (lambda (regs)
+	       (set! reg-srcs
+		     (map (lambda (reg) (cons reg '())) regs))))
+	    ((eq? msg 'dump)
+	     (list (list 'instruction-type insts)
+		   (list 'entryed-register entry-reg)
+		   (list 'save-or-restored srd-reg)
+		   (list 'register-source reg-srcs)))
+	    (else (error 'asm-stat-tbl "Unknown requrest" msg))))
+    dispatch))
 
 (define (extract-labels text receive)
   (if (null? text)
@@ -160,22 +207,24 @@
 
 (define (make-execution-procedure inst labels machine
 				  pc flag stack ops)
-  (cond ((eq? (car inst) 'assign)
-	 (make-assign inst machine labels ops pc))
-	((eq? (car inst) 'test)
-	 (make-test inst machine labels ops flag pc))
-	((eq? (car inst) 'branch)
-	 (make-branch inst machine labels flag pc))
-	((eq? (car inst) 'goto)
-	 (make-goto inst machine labels pc))
-	((eq? (car inst) 'save)
-	 (make-save inst machine stack pc))
-	((eq? (car inst) 'restore)
-	 (make-restore inst machine stack pc))
-	((eq? (car inst) 'perform)
-	 (make-perform inst machine labels ops pc))
-	(else error 'make-execution-procedure
-	      "Unknown instruction type" inst)))
+  (let ((analyzer (get-analyzer machine)))
+    ((analyzer 'new-inst) (car inst))
+    (cond ((eq? (car inst) 'assign)
+	   (make-assign inst machine labels ops pc))
+	  ((eq? (car inst) 'test)
+	   (make-test inst machine labels ops flag pc))
+	  ((eq? (car inst) 'branch)
+	   (make-branch inst machine labels flag pc))
+	  ((eq? (car inst) 'goto)
+	   (make-goto inst machine labels pc))
+	  ((eq? (car inst) 'save)
+	   (make-save inst machine stack pc))
+	  ((eq? (car inst) 'restore)
+	   (make-restore inst machine stack pc))
+	  ((eq? (car inst) 'perform)
+	   (make-perform inst machine labels ops pc))
+	  (else error 'make-execution-procedure
+		"Unknown instruction type" inst))))
 
 (define (make-assign inst machine labels operations pc)
   (let ((target
@@ -188,6 +237,8 @@
 	       (make-primitive-exp
 		(car value-exp) machine labels))))
       (lambda ()
+	(((get-analyzer machine) 'new-src)
+	 (assign-reg-name inst) value-exp)
 	(set-contents! target (value-proc))
 	(advance-pc pc)))))
 
@@ -224,6 +275,9 @@
 		(advance-pc pc))))
 	(error 'make-branch "Bad BRANCH instruction" inst))))
 
+(define (branch-dest branch-instruction)
+    (cadr branch-instruction))
+
 (define (make-goto inst machine labels pc)
   (let ((dest (goto-dest inst)))
     (cond ((label-exp? dest)
@@ -236,6 +290,7 @@
 		  (get-register machine
 				(register-exp-reg dest))))
 	     (lambda ()
+	       (((get-analyzer machine) 'new-entry) (register-exp-reg dest))
 	       (set-contents! pc (get-contents reg)))))
 	  (else (error 'make-goto "Bad GOTO instruction" inst)))))
 
@@ -246,12 +301,14 @@
   (let ((reg (get-register machine
 			   (stack-inst-reg-name inst))))
     (lambda ()
+      (((get-analyzer machine) 'new-srd) (stack-inst-reg-name inst))
       (push stack (get-contents reg))
       (advance-pc pc))))
 (define (make-restore inst machine stack pc)
   (let ((reg (get-register machine
 			   (stack-inst-reg-name inst))))
     (lambda ()
+      (((get-analyzer machine) 'new-srd) (stack-inst-reg-name inst))
       (set-contents! reg (pop stack))
       (advance-pc pc))))
 (define (stack-inst-reg-name stack-instruction)
