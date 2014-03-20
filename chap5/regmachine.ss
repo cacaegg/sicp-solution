@@ -261,7 +261,7 @@
 
 (define (make-perform inst machine labels operations pc)
   (let ((action (perform-action inst)))
-    (if (operations-exp? action)
+    (if (operation-exp? action)
 	(let ((action-proc
 	       (make-operation-exp
 		action machine labels operations)))

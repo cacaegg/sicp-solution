@@ -178,8 +178,7 @@
 	inst
 	(make-execution-procedure
 	 (instruction-text inst) labels machine
-	 pc flag stack ops)
-	(car labels)))
+	 pc flag stack ops)))
      insts)))
 
 (define (make-instruction text)
@@ -191,7 +190,7 @@
 (define (instruction-execution-proc inst)
   (cdr inst))
 
-(define (set-instruction-execution-proc! inst proc label)
+(define (set-instruction-execution-proc! inst proc)
   (set-cdr! inst proc))
 
 (define (make-label-entry label-name insts)
