@@ -1,3 +1,8 @@
+;;            Total pushes           Max depth
+;; Iterative  (n - 1) * 37 + 33      (n - 2) * 3 + 14, for all n >= 2
+;; Recursive  (n - 1) * 34 + 18      (n - 1) * 8 + 11
+
+
 (load "syntax.ss")
 (load "support-eceval.ss")
 (load "regmachine.ss")
@@ -32,6 +37,7 @@
 	(list 'first-exp first-exp)
 	(list 'last-exp? last-exp?)
 	(list 'rest-exps rest-exps)
+	(list 'no-more-exps? no-more-exps?)
 	(list 'if-predicate if-predicate)
 	(list 'if-consequent if-consequent)
 	(list 'if-alternative if-alternative)
@@ -182,10 +188,9 @@
     (save continue)
     (goto (label ev-sequence))
     ev-sequence
+    (test (op no-more-exps?) (reg unev))
+    (branch (label ev-sequence-end))
     (assign exp (op first-exp) (reg unev))
-    (test (op last-exp?) (reg unev))
-    ;; Tail recursion, don't save and restore the unneccessary register
-    (branch (label ev-sequence-last-exp))
     (save unev)
     (save env)
     (assign continue (label ev-sequence-continue))
@@ -195,9 +200,9 @@
     (restore unev)
     (assign unev (op rest-exps) (reg unev))
     (goto (label ev-sequence))
-    ev-sequence-last-exp
+    ev-sequence-end
     (restore continue)
-    (goto (label eval-dispatch))
+    (goto (reg continue))
     ev-if
     (save exp)
     (save env)

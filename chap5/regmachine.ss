@@ -25,21 +25,36 @@
 
 ;;; Stack implementation and operation interface
 (define (make-stack)
-  (let ((s '()))
+  (let ((s '())
+	(number-pushes 0)
+	(max-depth 0)
+	(current-depth 0))
     (define (push x)
-      (set! s (cons x s)))
+      (set! s (cons x s))
+      (set! number-pushes (+ number-pushes 1))
+      (set! current-depth (+ current-depth 1))
+      (set! max-depth (max max-depth current-depth)))
     (define (pop)
       (if (null? s)
 	  (error 'pop "Empty stack")
 	  (let ((top (car s)))
 	    (set! s (cdr s))
+	    (set! current-depth (- current-depth 1))
 	    top)))
     (define (initialize)
-      (set! s '()))
+      (set! s '())
+      (set! number-pushes 0)
+      (set! max-depth 0)
+      (set! current-depth 0))
+    (define (print-statistics)
+      (newline)
+      (display (list 'total-pushes '= number-pushes
+		     'max-depth '= max-depth)))
     (define (dispatch msg)
       (cond ((eq? msg 'push) push)
 	    ((eq? msg 'pop) (pop))
 	    ((eq? msg 'initialize) (initialize))
+	    ((eq? msg 'print-statistics) (print-statistics))
 	    (else
 	     (error 'stack "Unknown request" msg))))
     dispatch))
@@ -63,7 +78,9 @@
 	(the-instruction-sequence '()))
     (let ((the-ops
 	   (list (list 'initialize-stack
-		       (lambda () (stack 'initialize)))))
+		       (lambda () (stack 'initialize)))
+		 (list 'print-stack-statistics
+		       (lambda () (stack 'print-statistics)))))
 	  (register-table
 	   (list (list 'pc pc) (list 'flag flag))))
       (define (allocate-register name)

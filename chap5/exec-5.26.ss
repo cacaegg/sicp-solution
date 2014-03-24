@@ -1,3 +1,11 @@
+;; Max stack depth = 10
+
+;;  N   Total pushes
+;;  1   29
+;;  2   64
+;;  3   99
+;;  4   134
+;;  Total Pushes = (N - 1) * 35 + 29 
 (load "syntax.ss")
 (load "support-eceval.ss")
 (load "regmachine.ss")

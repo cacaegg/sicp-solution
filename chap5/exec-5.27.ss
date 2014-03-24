@@ -1,3 +1,15 @@
+;; Max stack depth = (N - 1) * 5 + 8
+
+;;  N   TotalPushes  MaxStack
+;;  1   16           8   
+;;  2   48           13
+;;  3   80           18
+;;  4   112          23
+;;  Total Pushes = (N - 1) * 32 + 16
+
+;;            Max Depth           Number of pushes
+;; Recursive  (n - 1) * 5 + 8     (n - 1) * 32 + 16
+;; Iterative  10                  (n - 1) * 35 + 29
 (load "syntax.ss")
 (load "support-eceval.ss")
 (load "regmachine.ss")
