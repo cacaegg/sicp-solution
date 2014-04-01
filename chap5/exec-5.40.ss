@@ -7,43 +7,22 @@
 (define (lexical-offset lex) (cdr lex))
 
 (define (lexical-address-lookup lex-addr env)
-  (define (walk-offset offset vars vals)
-    (cond ((> offset 0)
-	   (walk-offset (- offset 1)
-			(cdr vars) (cdr vals)))
-	  ((eq? (car vals) '*unassigned*)
-	   (error 'lexical-address-lookup "Uninitialized variable"
-		  (car vars)))
-	  (else (car vals))))
-  (define (walk-addr lex-addr env)
-    (let ((addr (lexical-addr lex-addr))
-	  (offset (lexical-offset lex-addr)))
-      (if (> addr 0)
-	  (walk-addr
-	   (make-lexical-addr (- addr 1) offset)
-	   (enclosing-environment env))
-	  (let ((frame (first-frame env)))
-	    (walk-offset offset
-	     (frame-variables frame) (frame-values frame))))))
-  (walk-addr lex-addr env))
+  (let ((frame env (lexical-frame lex-addr)))
+    (let ((val frame (lexical-offset lex-addr))))
+    (if (eq? val '*unassigned*)
+	(error 'lexical-address-lookup "Unassigned variable"
+	       lex-addr env)
+	val)))
 
 (define (lexical-address-set! lex-addr new-val env)
-  (define walk-offset offset vars 
-    (cond ((> offset 0)
-	   (walk-offset (- offset 1)
-			(cdr vars) (cdr vals)))
-	  (else (set-car! vals new-val))))
-  (define (walk-addr lex-addr env)
-    (let ((addr (lexical-addr lex-addr))
-	  (offset (lexical-offset lex-addr)))
-      (if (> addr 0)
-	  (walk-addr
-	   (make-lexical-addr (- addr 1) offset)
-	   (enclosing-environment env))
-	  (let ((frame (first-frame env)))
-	    (walk-offset offset
-	     (frame-variables frame) (frame-values frame))))))
-  (walk-addr lex-addr env))
+  (define (loop frame offset)
+    (cond ((null? frame)
+	   (error 'lexical-address-set! "Run out of frame" lex-addr env))
+	  ((eq? offset 0)
+	   (set-car! frame new-val))
+	  ((else (loop (cdr frame) (- offset 1))))))
+  (loop (list-ref env (lexical-frame lex-addr))
+	(lexical-offset lex-addr)))
 
 (define (extend-cenv frame env) (cons frame env))
 
