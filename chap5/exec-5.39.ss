@@ -1,18 +1,18 @@
 (load "support-eceval.ss")
 (load "syntax.ss")
 
-(define (make-lexical-addr frames offset)
-  (cons frame offset))
+(define (make-lexical-addr frame offset)
+  (list frame offset))
 (define (lexical-frame lex) (car lex))
-(define (lexical-offset lex) (cdr lex))
+(define (lexical-offset lex) (cadr lex))
 
 (define (lexical-address-lookup lex-addr env)
-  (let ((frame env (lexical-frame lex-addr)))
-    (let ((val frame (lexical-offset lex-addr))))
-    (if (eq? val '*unassigned*)
-	(error 'lexical-address-lookup "Unassigned variable"
-	       lex-addr env)
-	val)))
+  (let ((frame (list-ref env (lexical-frame lex-addr))))
+    (let ((val (list-ref frame (lexical-offset lex-addr))))
+      (if (eq? val '*unassigned*)
+	  (error 'lexical-address-lookup "Unassigned variable"
+		 lex-addr env)
+	  val))))
 
 (define (lexical-address-set! lex-addr new-val env)
   (define (loop frame offset)
@@ -20,7 +20,7 @@
 	   (error 'lexical-address-set! "Run out of frame" lex-addr env))
 	  ((eq? offset 0)
 	   (set-car! frame new-val))
-	  ((else (loop (cdr frame) (- offset 1))))))
+	  (else (loop (cdr frame) (- offset 1)))))
   (loop (list-ref env (lexical-frame lex-addr))
 	(lexical-offset lex-addr)))
 
@@ -40,27 +40,28 @@
 (define (empty-instruction-sequence)
   (make-instruction-sequence '() '() '()))
 
-(define (compile exp target linkage)
-  (display (list 'compiling exp target linkage)) (newline)
+(define (compile exp target linkage cenv)
+  (display (list 'compiling exp target linkage cenv)) (newline)
   (cond ((self-evaluating? exp)
-	 (compile-self-evaluating exp target linkage))
-	((quoted? exp) (compile-quoted exp target linkage))
+	 (compile-self-evaluating exp target linkage cenv))
+	((quoted? exp) (compile-quoted exp target linkage cenv))
 	((variable? exp)
-	 (compile-variable exp target linkage))
+	 (compile-variable exp target linkage cenv))
 	((assignment? exp)
-	 (compile-assignment exp target linkage))
+	 (compile-assignment exp target linkage cenv))
 	((definition? exp)
-	 (compile-definition exp target linkage))
-	((if? exp) (compile-if exp target linkage))
-	((lambda? exp) (compile-lambda exp target linkage))
+	 (compile-definition exp target linkage cenv))
+	((if? exp) (compile-if exp target linkage cenv))
+	((lambda? exp) (compile-lambda exp target linkage cenv))
 	((begin? exp)
 	 (compile-sequence (begin-actions exp)
 			   target
-			   linkage))
+			   linkage
+			   cenv))
 	((cond? exp)
-	 (compile (cond->if exp) target linkage))
+	 (compile (cond->if exp) target linkage cenv))
 	((application? exp)
-	 (compile-application exp target linkage))
+	 (compile-application exp target linkage cenv))
 	(else
 	 (error "Unknown expression type -- COMPILE" exp))))
 
@@ -84,17 +85,17 @@
 	      instruction-sequence
 	      (compile-linkage linkage)))
 
-(define (compile-self-evaluating exp target linkage)
+(define (compile-self-evaluating exp target linkage cenv)
   (end-with-linkage linkage
    (make-instruction-sequence '() (list target)
     `((assign ,target (const ,exp))))))
 
-(define (compile-quoted exp target linkage)
+(define (compile-quoted exp target linkage cenv)
   (end-with-linkage linkage
    (make-instruction-sequence '() (list target)
     `((assign ,target (const ,(text-of-quotation exp)))))))
 
-(define (compile-variable exp target linkage)
+(define (compile-variable exp target linkage cenv)
   ;; (display 'compile-variable) (newline)
   (end-with-linkage linkage
    (make-instruction-sequence '(env) (list target)
@@ -103,7 +104,7 @@
 	      (const ,exp)
 	      (reg env))))))
 
-(define (compile-assignment exp target linkage)
+(define (compile-assignment exp target linkage cenv)
   (let ((var (assignment-variable exp))
 	(get-value-code
 	 (compile (assignment-value exp) 'val 'next)))
@@ -117,11 +118,11 @@
 		  (reg env))
 	 (assign ,target (const ok))))))))
 
-(define (compile-definition exp target linkage)
+(define (compile-definition exp target linkage cenv)
   ;; (display (list 'compile-definition (definition-value exp)) ) (newline)
   (let ((var (definition-variable exp))
 	(get-value-code
-	 (compile (definition-value exp) 'val 'next)))
+	 (compile (definition-value exp) 'val 'next cenv)))
     (end-with-linkage linkage
      (preserving '(env)
       get-value-code
@@ -132,18 +133,18 @@
 		  (reg env))
 	 (assign ,target (const ok))))))))
 
-(define (compile-if exp target linkage)
+(define (compile-if exp target linkage cenv)
   (let ((t-branch (make-label 'true-branch))
 	(f-branch (make-label 'false-branch))
 	(after-if (make-label 'after-if)))
     (let ((consequent-linkage
 	   (if (eq? linkage 'next) after-if linkage)))
-      (let ((p-code (compile (if-predicate exp) 'val 'next))
+      (let ((p-code (compile (if-predicate exp) 'val 'next cenv))
 	    (c-code
 	     (compile
-	      (if-consequent exp) target consequent-linkage))
+	      (if-consequent exp) target consequent-linkage cenv))
 	    (a-code
-	     (compile (if-alternative exp) target linkage)))
+	     (compile (if-alternative exp) target linkage cenv)))
 	(preserving '(env continue)
 	 p-code
 	 (append-instruction-sequences
@@ -155,14 +156,14 @@
 	   (append-instruction-sequences f-branch a-code))
 	  after-if))))))
 
-(define (compile-sequence seq target linkage)
+(define (compile-sequence seq target linkage cenv)
   (if (last-exp? seq)
-      (compile (first-exp seq) target linkage)
+      (compile (first-exp seq) target linkage cenv)
       (preserving '(env continue)
-       (compile (first-exp seq) target 'next)
-       (compile-sequence (rest-exps seq) target linkage))))
+       (compile (first-exp seq) target 'next cenv)
+       (compile-sequence (rest-exps seq) target linkage cenv))))
 
-(define (compile-lambda exp target linkage)
+(define (compile-lambda exp target linkage cenv)
   (let ((proc-entry (make-label 'entry))
 	(after-lambda (make-label 'after-lambda)))
     (let ((lambda-linkage
@@ -175,10 +176,10 @@
 		    (op make-compiled-procedure)
 		    (label ,proc-entry)
 		    (reg env)))))
-	(compile-lambda-body exp proc-entry))
+	(compile-lambda-body exp proc-entry cenv))
        after-lambda))))
 
-(define (compile-lambda-body exp proc-entry)
+(define (compile-lambda-body exp proc-entry cenv)
   (let ((formals (lambda-parameters exp)))
     (append-instruction-sequences
      (make-instruction-sequence '(env proc argl) '(env)
@@ -189,18 +190,18 @@
 		(const ,formals)
 		(reg argl)
 		(reg env))))
-     (compile-sequence (lambda-body exp) 'val 'return))))
+     (compile-sequence (lambda-body exp) 'val 'return cenv))))
 
-(define (compile-application exp target linkage)
-  (let ((proc-code (compile (operator exp) 'proc 'next))
+(define (compile-application exp target linkage cenv)
+  (let ((proc-code (compile (operator exp) 'proc 'next cenv))
 	(operand-codes
-	 (map (lambda (operand) (compile operand 'val 'next))
+	 (map (lambda (operand) (compile operand 'val 'next cenv))
 	      (operands exp))))
     (preserving '(env continue)
      proc-code
      (preserving '(proc continue)
       (construct-arglist operand-codes)
-      (compile-procedure-call target linkage)))))
+      (compile-procedure-call target linkage cenv)))))
 
 (define (construct-arglist operand-codes)
   (let ((operand-codes (reverse operand-codes)))
@@ -233,7 +234,7 @@
 	 code-for-next-arg
 	 (code-to-get-rest-args (cdr operand-codes))))))
 
-(define (compile-procedure-call target linkage)
+(define (compile-procedure-call target linkage cenv)
   (let ((primitive-branch (make-label 'primitive-branch))
 	(compiled-branch (make-label 'compiled-branch))
 	(after-call (make-label 'after-call)))
@@ -246,7 +247,7 @@
        (parallel-instruction-sequences
 	(append-instruction-sequences
 	 compiled-branch
-	 (compile-proc-appl target linkage))
+	 (compile-proc-appl target linkage cenv))
 	(append-instruction-sequences
 	 primitive-branch
 	 (end-with-linkage linkage
@@ -258,7 +259,7 @@
 		     (reg argl)))))))
        after-call))))
 
-(define (compile-proc-appl target linkage)
+(define (compile-proc-appl target linkage cenv)
   (cond ((and (eq? target 'val) (not (eq? linkage 'return)))
 	 (make-instruction-sequence '(proc) all-regs
 	  `((assign continue (label ,linkage))
@@ -358,10 +359,6 @@
 
 '(Compiler Loaded)
 
-(compile
- '(define (factorial n)
-    (if (= n 1)
-	1
-	(* (factorial (- n 1)) n)))
- 'val
- 'next)
+(find-variable 'c '((y z) (a b c d e) (x y)))
+(find-variable 'x '((y z) (a b c d e) (x y)))
+(find-variable 'w '((y z) (a b c d e) (x y)))

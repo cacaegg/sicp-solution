@@ -26,6 +26,20 @@
 
 (define (extend-cenv frame env) (cons frame env))
 
+(define (find-variable var cenv)
+  (define (loop nframe cenv)
+    (cond ((null? cenv) 'not-found)
+	  ((null? (car cenv))
+	   (loop (+ nframe 1) 0 (cdr cenv)))
+	  (else
+	   (let ((result (memq var (car cenv))))
+	     (if (eq? #f result)
+		 (loop (+ nframe 1) (cdr cenv))
+		 (make-lexical-addr nframe
+		  (- (length (car cenv))
+		     (length result))))))))
+  (loop 0 cenv))
+
 (define (the-empty-environment) '())
 
 (define label-counter 0)
