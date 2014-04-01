@@ -45,6 +45,8 @@
 	     (frame-variables frame) (frame-values frame))))))
   (walk-addr lex-addr env))
 
+(define (extend-cenv frame env) (cons frame env))
+
 (define (the-empty-environment) '())
 
 (define label-counter 0)
@@ -203,23 +205,17 @@
        after-lambda))))
 
 (define (compile-lambda-body exp proc-entry cenv)
-  (define (make-unassigned-list list current)
-    (if (null? list) current
-	(make-unassigned-list (cdr list)
-			      (cons '*unassigned* current))))
   (let ((formals (lambda-parameters exp)))
-    (let ((new-cenv
-	   (extend-environment formals (make-unassigned-list formals '()))))
-      (append-instruction-sequences
-       (make-instruction-sequence '(env proc argl) '(env)
-	`(,proc-entry
-	  (assign env (op compiled-procedure-env) (reg proc))
-	  (assign env
-		  (op extend-environment)
-		  (const ,formals)
-		  (reg argl)
-		  (reg env))))
-       (compile-sequence (lambda-body exp) 'val 'return new-cenv)))))
+    (append-instruction-sequences
+     (make-instruction-sequence '(env proc argl) '(env)
+      `(,proc-entry
+	(assign env (op compiled-procedure-env) (reg proc))
+	(assign env
+		(op extend-environment)
+		(const ,formals)
+		(reg argl)
+		(reg env))))
+     (compile-sequence (lambda-body exp) 'val 'return (extend-cenv formals cenv)))))
 
 (define (compile-application exp target linkage cenv)
   (let ((proc-code (compile (operator exp) 'proc 'next cenv))
